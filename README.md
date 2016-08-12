@@ -5,7 +5,7 @@
 
 ## What is this?
 
-This is P4 client/server protocol Java implementation.
+This is pure Java P4 client/server protocol implementation.
 
 ## External links
 
