@@ -1,7 +1,6 @@
 # Overview
 
 [![Build Status](https://travis-ci.org/bozaro/p4proto-java.svg?branch=master)](https://travis-ci.org/bozaro/p4proto-java)
-[![Maven Central](https://img.shields.io/maven-central/v/ru.bozaro.gitlfs/gitlfs-common.svg)](http://mvnrepository.com/artifact/ru.bozaro.gitlfs)
 
 ## What is this?
 
