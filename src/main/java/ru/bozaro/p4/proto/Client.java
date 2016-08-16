@@ -27,7 +27,7 @@ public class Client {
     public interface Callback {
 
         @Nullable
-        Message.Builder exec(@NotNull Message message);
+        Message.Builder exec(@NotNull Message message) throws IOException;
 
     }
 
@@ -93,7 +93,7 @@ public class Client {
         return params;
     }
 
-    public void p4(@NotNull Callback callback, @NotNull String func, @NotNull String... args) throws IOException {
+    public synchronized void p4(@NotNull Callback callback, @NotNull String func, @NotNull String... args) throws IOException {
         if (!protocolSent) {
             final Message.Builder builder = new Message.Builder()
                     .param("client", "80")
