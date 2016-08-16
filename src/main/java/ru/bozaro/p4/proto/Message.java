@@ -209,7 +209,7 @@ public class Message {
 
             if (len + position + 1 > buf.length)
                 throw new IOException("Unexpected end of stream");
-            String value = new String(buf, position, len, StandardCharsets.UTF_8);
+            byte[] value = Arrays.copyOfRange(buf, position, position + len);
             position += len;
 
             if (buf[position] != 0)
