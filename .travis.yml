@@ -1,8 +1,12 @@
 language: java
-sudo: false
+sudo: true
 jdk:
 - oraclejdk8
 script:
 - ./gradlew check
 install:
+- wget -qO - https://package.perforce.com/perforce.pubkey | sudo apt-key add -
+- echo "deb http://package.perforce.com/apt/ubuntu $(lsb_release -cs) release" | sudo tee --append /etc/apt/sources.list.d/perforce.list
+- sudo apt-get update
+- sudo apt-get install helix-p4d
 - ./gradlew assemble
