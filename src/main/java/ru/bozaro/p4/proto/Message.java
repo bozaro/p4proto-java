@@ -90,22 +90,24 @@ public class Message {
 
         @NotNull
         public Builder param(@NotNull String name, @Nullable String value) {
-            if (name == null) {
-            } else if (name.isEmpty()) {
-                args.add(value);
-            } else {
-                params.put(name, value.getBytes(StandardCharsets.UTF_8));
+            if (value != null) {
+                if (name.isEmpty()) {
+                    args.add(value);
+                } else {
+                    params.put(name, value.getBytes(StandardCharsets.UTF_8));
+                }
             }
             return this;
         }
 
         @NotNull
         public Builder param(@NotNull String name, @Nullable byte[] value) {
-            if (name == null) {
-            } else if (name.isEmpty()) {
-                args.add(new String(value, StandardCharsets.UTF_8));
-            } else {
-                params.put(name, value);
+            if (value != null) {
+                if (name.isEmpty()) {
+                    args.add(new String(value, StandardCharsets.UTF_8));
+                } else {
+                    params.put(name, value);
+                }
             }
             return this;
         }
