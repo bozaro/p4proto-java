@@ -59,6 +59,9 @@ allprojects {
 
   test {
     useTestNG()
+    testLogging {
+      exceptionFormat = 'full'
+    }
     maxHeapSize = "256m"
     ignoreFailures = "$testIgnoreFailures".toBoolean()
   }
