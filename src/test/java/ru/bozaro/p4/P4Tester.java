@@ -15,6 +15,8 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 
+import static org.testng.Assert.assertEquals;
+
 /**
  * @author Marat Radchenko
  */
@@ -31,7 +33,7 @@ public final class P4Tester implements AutoCloseable {
     @NotNull
     private Client client;
 
-    public P4Tester() throws Exception {
+    public P4Tester(boolean unicode) throws Exception {
 
         File serverDir = File.createTempFile("p4-server-", "");
         if (!serverDir.delete())
@@ -39,6 +41,17 @@ public final class P4Tester implements AutoCloseable {
         if (!serverDir.mkdir())
             throw new IOException("Failed to mkdir " + serverDir);
         serverPath = serverDir.toPath();
+
+        if (unicode) {
+            final Process process = Runtime.getRuntime().exec(new String[]{
+                    "p4d",
+                    "-xi",
+                    "-r", serverPath.toString(),
+            });
+            final int exitCode = process.waitFor();
+            assertEquals(0, exitCode);
+        }
+
         final int serverPort = detectPort();
         daemon = Runtime.getRuntime().exec(new String[]{
                 "p4d",
@@ -52,6 +65,7 @@ public final class P4Tester implements AutoCloseable {
             try {
                 socket = new Socket(HOST, serverPort);
                 client = new Client(socket, (prompt, noecho) -> "", null);
+                client.verbose = true;
                 break;
             } catch (ConnectException e) {
                 if (System.currentTimeMillis() > timeout)
