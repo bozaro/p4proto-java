@@ -22,19 +22,6 @@ import java.util.HashMap;
  */
 public class Client {
 
-    @FunctionalInterface
-    public interface Callback {
-
-        @Nullable
-        Message.Builder exec(@NotNull Message message) throws IOException;
-    }
-
-    @FunctionalInterface
-    public interface InputResolver {
-        @Nullable
-        String getUserInput(@Nullable String prompt, boolean noecho) throws IOException;
-    }
-
     @NotNull
     private final Message.Builder baseMessage;
     @NotNull
@@ -43,9 +30,9 @@ public class Client {
     private final Socket socket;
     @NotNull
     private final HashMap<String, Callback> funcs;
+    public boolean verbose = false;
     private boolean protocolSent = false;
     private int protocolServer = -1;
-    public boolean verbose = false;
     @Nullable
     private String password;
     @Nullable
@@ -53,8 +40,8 @@ public class Client {
     @Nullable
     private byte[] secretHash = null;
 
-    public Client(@NotNull Socket socket, @NotNull String username, @Nullable String password, @NotNull InputResolver inputResolver) {
-        this.baseMessage = createBaseMessage(username);
+    public Client(@NotNull Socket socket, @NotNull String username, @Nullable String password, boolean tag, @NotNull InputResolver inputResolver) {
+        this.baseMessage = createBaseMessage(username, tag);
         this.socket = socket;
         this.password = password;
         this.funcs = new HashMap<>();
@@ -67,11 +54,13 @@ public class Client {
     }
 
     @NotNull
-    private static Message.Builder createBaseMessage(@NotNull String username) {
+    private static Message.Builder createBaseMessage(@NotNull String username, boolean tag) {
         final Message.Builder result = new Message.Builder();
 
         result.param("autoLogin", "");
-        result.param("tag", "yes");
+        if (tag) {
+            result.param("tag", "");
+        }
         result.param("enableStreams", "expandAndmaps" /*, "yes"*/);
         result.param("client", "");
         result.param("cwd", "");
@@ -81,6 +70,28 @@ public class Client {
         result.param("clientCase", "1"); // 0 - case insensitive, 1 - case sensitive
 
         return result;
+    }
+
+    @Nullable
+    protected static byte[] getSocketAddr(@NotNull SocketAddress address) {
+        if (address instanceof InetSocketAddress) {
+            InetSocketAddress inet = (InetSocketAddress) address;
+            return String.format("%s:%d", inet.getHostString(), inet.getPort()).getBytes();
+        }
+        return null;
+    }
+
+    @NotNull
+    private static byte[] md5(@NotNull byte[]... parts) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("MD5");
+            for (byte[] part : parts) {
+                digest.update(part);
+            }
+            return Mangle.OtoX(digest.digest());
+        } catch (NoSuchAlgorithmException e) {
+            throw new Error(e);
+        }
     }
 
     public synchronized void p4(@NotNull Callback callback, @NotNull String func, @NotNull String... args) throws IOException {
@@ -229,25 +240,16 @@ public class Client {
                 .param("daddr", daddr);
     }
 
-    @Nullable
-    protected static byte[] getSocketAddr(@NotNull SocketAddress address) {
-        if (address instanceof InetSocketAddress) {
-            InetSocketAddress inet = (InetSocketAddress) address;
-            return String.format("%s:%d", inet.getHostString(), inet.getPort()).getBytes();
-        }
-        return null;
+    @FunctionalInterface
+    public interface Callback {
+
+        @Nullable
+        Message.Builder exec(@NotNull Message message) throws IOException;
     }
 
-    @NotNull
-    private static byte[] md5(@NotNull byte[]... parts) {
-        try {
-            MessageDigest digest = MessageDigest.getInstance("MD5");
-            for (byte[] part : parts) {
-                digest.update(part);
-            }
-            return Mangle.OtoX(digest.digest());
-        } catch (NoSuchAlgorithmException e) {
-            throw new Error(e);
-        }
+    @FunctionalInterface
+    public interface InputResolver {
+        @Nullable
+        String getUserInput(@Nullable String prompt, boolean noecho) throws IOException;
     }
 }
