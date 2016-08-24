@@ -45,7 +45,7 @@ public final class P4 {
         }
 
         try (Socket socket = new Socket(host, port)) {
-            final Client client = new Client(socket, cmd.user, cmd.password, P4::userInput);
+            final Client client = new Client(socket, cmd.user, cmd.password, cmd.tag, P4::userInput);
             final String func = cmd.command.get(0);
             final String[] funcArgs = cmd.command.subList(1, cmd.command.size()).toArray(new String[0]);
 
@@ -106,6 +106,8 @@ public final class P4 {
         @NotNull
         @Parameter(names = {"-P"}, description = "set user's password (default $P4PASSWD)")
         private String password = System.getenv().getOrDefault("P4PASSWD", "");
+        @Parameter(names = {"-Ztag"})
+        private boolean tag = false;
         @Parameter(names = {"-h", "--help"}, description = "Show help", help = true)
         private boolean help = false;
     }
