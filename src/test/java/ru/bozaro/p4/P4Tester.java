@@ -64,7 +64,8 @@ public final class P4Tester implements AutoCloseable {
         while (true) {
             try {
                 socket = new Socket(HOST, serverPort);
-                client = new Client(socket, "JackSparrow", null, true, (prompt, noecho) -> "");
+                client = new Client(socket, "JackSparrow", null, true, (prompt, noecho) -> "", message -> {
+                });
                 client.verbose = true;
                 break;
             } catch (ConnectException e) {
