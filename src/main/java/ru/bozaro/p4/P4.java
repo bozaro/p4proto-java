@@ -45,7 +45,13 @@ public final class P4 {
         }
 
         try (Socket socket = new Socket(host, port)) {
-            final Client client = new Client(socket, cmd.user, cmd.password, cmd.tag, P4::userInput);
+            final Client client = new Client(socket,
+                    cmd.user,
+                    cmd.password,
+                    cmd.tag,
+                    P4::userInput,
+                    System.out::println);
+
             final String func = cmd.command.get(0);
             final String[] funcArgs = cmd.command.subList(1, cmd.command.size()).toArray(new String[0]);
 
@@ -77,14 +83,6 @@ public final class P4 {
                     if (!Message.FUNC.equals(paramName)) {
                         System.out.println("... " + paramName + " " + message.getString(paramName));
                     }
-                }
-                return null;
-
-            case "client-Message":
-                String fmt;
-                for (int i = 0; (fmt = message.getString("fmt" + i)) != null; ++i) {
-                    final String msg = StringInterpolator.interpolate(fmt, s -> message.getStringOrDefault(s, ""));
-                    System.out.println(msg);
                 }
                 return null;
 

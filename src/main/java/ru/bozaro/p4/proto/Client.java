@@ -2,6 +2,7 @@ package ru.bozaro.p4.proto;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
+import ru.bozaro.p4.StringInterpolator;
 import ru.bozaro.p4.crypto.Mangle;
 
 import java.io.IOException;
@@ -27,6 +28,8 @@ public class Client {
     @NotNull
     private final InputResolver inputResolver;
     @NotNull
+    private final MessageOutput messageOutput;
+    @NotNull
     private final Socket socket;
     @NotNull
     private final HashMap<String, Callback> funcs;
@@ -40,7 +43,13 @@ public class Client {
     @Nullable
     private byte[] secretHash = null;
 
-    public Client(@NotNull Socket socket, @NotNull String username, @Nullable String password, boolean tag, @NotNull InputResolver inputResolver) {
+    public Client(@NotNull Socket socket,
+                  @NotNull String username,
+                  @Nullable String password,
+                  boolean tag,
+                  @NotNull InputResolver inputResolver,
+                  @NotNull MessageOutput messageOutput) {
+        this.messageOutput = messageOutput;
         this.baseMessage = createBaseMessage(username, tag);
         this.socket = socket;
         this.password = password;
@@ -49,6 +58,7 @@ public class Client {
         funcs.put("flush1", this::flush1);
         funcs.put("protocol", this::clientProtocol);
         funcs.put("client-Crypto", this::clientCrypto);
+        funcs.put("client-Message", this::clientMessage);
         funcs.put("client-Prompt", this::clientPrompt);
         funcs.put("client-SetPassword", this::clientSetPassword);
     }
@@ -92,6 +102,16 @@ public class Client {
         } catch (NoSuchAlgorithmException e) {
             throw new Error(e);
         }
+    }
+
+    @Nullable
+    private Message.Builder clientMessage(@NotNull Message message) {
+        String fmt;
+        for (int i = 0; (fmt = message.getString("fmt" + i)) != null; ++i) {
+            final String msg = StringInterpolator.interpolate(fmt, s -> message.getStringOrDefault(s, ""));
+            messageOutput.output(msg);
+        }
+        return null;
     }
 
     public synchronized void p4(@NotNull Callback callback, @NotNull String func, @NotNull String... args) throws IOException {
@@ -238,6 +258,12 @@ public class Client {
                 .param("data", result)
                 .param("digest", digest)
                 .param("daddr", daddr);
+    }
+
+    @FunctionalInterface
+    public interface MessageOutput {
+
+        void output(@NotNull String message);
     }
 
     @FunctionalInterface
