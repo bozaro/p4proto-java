@@ -14,17 +14,33 @@ public final class StringInterpolator {
         final StringBuilder result = new StringBuilder();
 
         int argStart = -1;
+        int escapeStart = -1;
         for (int i = 0; i < fmt.length(); ++i) {
             final char c = fmt.charAt(i);
             switch (c) {
                 case '%':
                     if (argStart >= 0) {
-                        final String argName = fmt.substring(argStart, i);
+                        if (escapeStart >= 0) {
+                            final int escapeEnd = Math.max(escapeStart, i - 1);
+                            result.append(fmt.substring(escapeStart, escapeEnd));
+                        } else {
+                            final String argName = fmt.substring(argStart, i);
+                            final String argValue = lookup.apply(argName);
+                            result.append(argValue);
+                        }
                         argStart = -1;
-                        final String argValue = lookup.apply(argName);
-                        result.append(argValue);
+                        escapeStart = -1;
                     } else {
                         argStart = i + 1;
+                    }
+                    break;
+                case '\'':
+                    if (escapeStart < 0) {
+                        if (argStart >= 0) {
+                            escapeStart = i + 1;
+                        } else {
+                            result.append(c);
+                        }
                     }
                     break;
                 default:
