@@ -1,12 +1,15 @@
 language: java
-sudo: true
+sudo: false
+env:
+- P4D_VERSION=15.2
+- P4D_VERSION=16.1
 jdk:
 - oraclejdk8
 script:
 - ./gradlew check
 install:
-- wget -qO - https://package.perforce.com/perforce.pubkey | sudo apt-key add -
-- echo "deb http://package.perforce.com/apt/ubuntu $(lsb_release -cs) release" | sudo tee --append /etc/apt/sources.list.d/perforce.list
-- sudo apt-get update
-- sudo apt-get install helix-p4d
+- mkdir -p build/r${P4D_VERSION}
+- wget http://cdist2.perforce.com/perforce/r${P4D_VERSION}/bin.linux26x86_64/p4d -O build/r${P4D_VERSION}/p4d
+- chmod +x build/r${P4D_VERSION}/p4d
+- export PATH=${PATH}:`pwd`/build/r${P4D_VERSION}
 - ./gradlew assemble
