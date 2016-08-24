@@ -47,6 +47,12 @@ public class Message {
         return toString(params.getOrDefault("func", EMPTY_BYTES));
     }
 
+    @NotNull
+    public String getStringOrDefault(@NotNull String key, @NotNull String defaultValue) {
+        final String result = getString(key);
+        return result == null ? defaultValue : result;
+    }
+
     @Nullable
     public String getString(@NotNull String key) {
         byte[] value = params.get(key);
@@ -80,8 +86,9 @@ public class Message {
     }
 
     public static class Builder {
+        /** We want to preserve order of this for human-friendliness of stuff like 'p4 info' */
         @NotNull
-        private final Map<String, byte[]> params = new TreeMap<>();
+        private final Map<String, byte[]> params = new LinkedHashMap<>();
         @NotNull
         private final List<String> args = new ArrayList<>();
 

@@ -41,6 +41,7 @@ allprojects {
 
   dependencies {
     compile "org.jetbrains:annotations:15.0"
+    compile "com.beust:jcommander:1.48"
 
     testCompile "org.testng:testng:6.9.10"
   }

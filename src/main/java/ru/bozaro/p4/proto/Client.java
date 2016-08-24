@@ -14,8 +14,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.Map;
-import java.util.TreeMap;
 
 /**
  * P4 client protocol implementation.
@@ -23,18 +21,18 @@ import java.util.TreeMap;
  * @author Artem V. Navrotskiy
  */
 public class Client {
+
     @FunctionalInterface
     public interface Callback {
 
         @Nullable
         Message.Builder exec(@NotNull Message message) throws IOException;
-
     }
 
     @FunctionalInterface
     public interface InputResolver {
         @Nullable
-        String getUserInput(@Nullable String prompt, boolean noecho);
+        String getUserInput(@Nullable String prompt, boolean noecho) throws IOException;
     }
 
     @NotNull
@@ -45,18 +43,20 @@ public class Client {
     private final Socket socket;
     @NotNull
     private final HashMap<String, Callback> funcs;
-
     private boolean protocolSent = false;
     private int protocolServer = -1;
     public boolean verbose = false;
+    @Nullable
+    private String password;
     @Nullable
     private byte[] secretToken = null;
     @Nullable
     private byte[] secretHash = null;
 
-    public Client(@NotNull Socket socket, @NotNull InputResolver inputResolver, @Nullable Map<String, String> params) {
-        this.baseMessage = createBaseMessage(params);
+    public Client(@NotNull Socket socket, @NotNull String username, @Nullable String password, @NotNull InputResolver inputResolver) {
+        this.baseMessage = createBaseMessage(username);
         this.socket = socket;
+        this.password = password;
         this.funcs = new HashMap<>();
         this.inputResolver = inputResolver;
         funcs.put("flush1", this::flush1);
@@ -66,32 +66,21 @@ public class Client {
         funcs.put("client-SetPassword", this::clientSetPassword);
     }
 
-    private Message.Builder createBaseMessage(@Nullable Map<String, String> params) {
+    @NotNull
+    private static Message.Builder createBaseMessage(@NotNull String username) {
         final Message.Builder result = new Message.Builder();
-        for (Map.Entry<String, String> param : getDefaultParams().entrySet()) {
-            result.param(param.getKey(), param.getValue());
-        }
-        if (params != null) {
-            for (Map.Entry<String, String> param : params.entrySet()) {
-                result.param(param.getKey(), param.getValue());
-            }
-        }
-        return result;
-    }
 
-    public static Map<String, String> getDefaultParams() {
-        final String user = System.getenv("P4USER");
-        final Map<String, String> params = new TreeMap<>();
-        params.put("autoLogin", "");
-        params.put("tag", "yes");
-        params.put("enableStreams", "expandAndmaps" /*, "yes"*/);
-        params.put("client", "");
-        params.put("cwd", "");
-        params.put("os", "UNIX");
-        params.put("user", user == null ? System.getProperty("user.name") : user);
-        params.put("charset", "1"); // UTF-8
-        params.put("clientCase", "1"); // 0 - case insensitive, 1 - case sensitive
-        return params;
+        result.param("autoLogin", "");
+        result.param("tag", "yes");
+        result.param("enableStreams", "expandAndmaps" /*, "yes"*/);
+        result.param("client", "");
+        result.param("cwd", "");
+        result.param("os", "UNIX");
+        result.param("user", username);
+        result.param("charset", "1"); // UTF-8
+        result.param("clientCase", "1"); // 0 - case insensitive, 1 - case sensitive
+
+        return result;
     }
 
     public synchronized void p4(@NotNull Callback callback, @NotNull String func, @NotNull String... args) throws IOException {
@@ -166,8 +155,7 @@ public class Client {
             protocolServer = Integer.parseInt(protocolVersionString);
         }
 
-        if (req.getBytes("unicode") != null)
-        {
+        if (req.getBytes("unicode") != null) {
             baseMessage.param("unicode", "1");
         }
 
@@ -205,9 +193,12 @@ public class Client {
     }
 
     @Nullable
-    protected Message.Builder clientPrompt(@NotNull Message req) {
-        final String userInput = inputResolver.getUserInput(req.getString("data"), req.getBytes("noecho") != null);
-        return clientPrompt(req, userInput != null ? userInput.getBytes(StandardCharsets.UTF_8) : null);
+    protected Message.Builder clientPrompt(@NotNull Message req) throws IOException {
+        if (password == null || password.length() <= 0) {
+            password = inputResolver.getUserInput(req.getString("data"), req.getBytes("noecho") != null);
+        }
+
+        return clientPrompt(req, password != null ? password.getBytes(StandardCharsets.UTF_8) : null);
     }
 
     @Nullable
