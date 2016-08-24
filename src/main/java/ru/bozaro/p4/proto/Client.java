@@ -47,6 +47,7 @@ public class Client {
     private final HashMap<String, Callback> funcs;
 
     private boolean protocolSent = false;
+    private int protocolServer = -1;
     public boolean verbose = false;
     @Nullable
     private byte[] secretToken = null;
@@ -59,7 +60,7 @@ public class Client {
         this.funcs = new HashMap<>();
         this.inputResolver = inputResolver;
         funcs.put("flush1", this::flush1);
-        funcs.put("protocol", this::noop);
+        funcs.put("protocol", this::clientProtocol);
         funcs.put("client-Crypto", this::clientCrypto);
         funcs.put("client-Prompt", this::clientPrompt);
         funcs.put("client-SetPassword", this::clientSetPassword);
@@ -95,13 +96,16 @@ public class Client {
 
     public synchronized void p4(@NotNull Callback callback, @NotNull String func, @NotNull String... args) throws IOException {
         if (!protocolSent) {
-            final Message.Builder builder = new Message.Builder()
+            send(new Message.Builder()
                     .param("client", "80")
                     .param("sndbuf", "524288")
                     .param("rcvbuf", "524288")
-                    .param("func", "protocol");
-            send(builder);
+                    .param("func", "protocol"));
             protocolSent = true;
+
+            // HACK! We need to know server version before calling RPCs but server won't send us 'protocol' message
+            // before we call any RPC. So, call any random RPC and just ignore its result.
+            p4(message -> null, "discover");
         }
         final Message.Builder builder = baseMessage.clone().param(Message.FUNC, "user-" + func);
         for (String arg : args) {
@@ -118,10 +122,10 @@ public class Client {
                 throw new StreamCorruptedException();
             if ("release".equals(clientFunc))
                 break;
-            final Callback buildin = funcs.get(clientFunc);
+            final Callback builtin = funcs.get(clientFunc);
             final Message.Builder response;
-            if (buildin != null) {
-                response = buildin.exec(message);
+            if (builtin != null) {
+                response = builtin.exec(message);
             } else {
                 response = callback.exec(message);
             }
@@ -151,6 +155,26 @@ public class Client {
     }
 
     @Nullable
+    protected Message.Builder clientProtocol(@NotNull Message req) {
+        String protocolVersionString = req.getString("server2");
+
+        if (protocolVersionString == null) {
+            protocolVersionString = req.getString("server");
+        }
+
+        if (protocolVersionString != null) {
+            protocolServer = Integer.parseInt(protocolVersionString);
+        }
+
+        if (req.getBytes("unicode") != null)
+        {
+            baseMessage.param("unicode", "1");
+        }
+
+        return null;
+    }
+
+    @Nullable
     protected Message.Builder clientSetPassword(@NotNull Message req) {
         final byte[] token = req.getBytes("digest");
         final byte[] ticket = req.getBytes("data");
@@ -171,7 +195,7 @@ public class Client {
         final byte[] token = req.getBytes("token");
         final byte[] daddr = getSocketAddr(socket.getRemoteSocketAddress());
         byte[] result = md5(token, secretToken);
-        if (daddr != null) {
+        if (daddr != null && protocolServer >= 29) {
             result = md5(result, daddr);
         }
         return new Message.Builder()
@@ -203,7 +227,7 @@ public class Client {
             if (digest.length > 0) {
                 result = md5(result, digest);
             }
-            if (daddr != null) {
+            if (daddr != null && protocolServer >= 29) {
                 result = md5(result, daddr);
             }
         }
@@ -215,11 +239,6 @@ public class Client {
     }
 
     @Nullable
-    protected Message.Builder noop(@NotNull Message req) {
-        return null;
-    }
-
-    @NotNull
     protected static byte[] getSocketAddr(@NotNull SocketAddress address) {
         if (address instanceof InetSocketAddress) {
             InetSocketAddress inet = (InetSocketAddress) address;
