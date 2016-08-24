@@ -22,7 +22,7 @@ public final class StringInterpolatorTest {
 
     @Test
     public void arg() {
-        assertEquals(interpolate("%foo%", s -> "bar"), "bar");
+        assertEquals(interpolate("%foo%", s -> "foo".equals(s) ? "bar" : ""), "bar");
     }
 
     @Test
@@ -38,5 +38,25 @@ public final class StringInterpolatorTest {
     @Test
     public void unmatched2() {
         assertEquals(interpolate("%aa", s -> ""), "");
+    }
+
+    @Test
+    public void escaped() {
+        assertEquals(interpolate("Perforce password (%'P4PASSWD'%) invalid or unset.", s -> ""), "Perforce password (P4PASSWD) invalid or unset.");
+    }
+
+    @Test
+    public void escapedEmpty() {
+        assertEquals(interpolate("%''%", s -> ""), "");
+    }
+
+    @Test
+    public void escapedInvalid() {
+        assertEquals(interpolate("%'%", s -> ""), "");
+    }
+
+    @Test
+    public void quote() {
+        assertEquals(interpolate("'", s -> ""), "'");
     }
 }
