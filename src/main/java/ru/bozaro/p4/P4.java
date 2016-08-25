@@ -5,8 +5,10 @@ import com.beust.jcommander.Parameter;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import ru.bozaro.p4.proto.Client;
+import ru.bozaro.p4.proto.ErrorSeverity;
 import ru.bozaro.p4.proto.Message;
 
+import javax.xml.ws.Holder;
 import java.io.BufferedReader;
 import java.io.Console;
 import java.io.IOException;
@@ -50,13 +52,20 @@ public final class P4 {
                     cmd.password,
                     cmd.tag,
                     P4::userInput,
-                    System.out::println);
+                    P4::outputMessage);
 
             final String func = cmd.command.get(0);
             final String[] funcArgs = cmd.command.subList(1, cmd.command.size()).toArray(new String[0]);
 
             client.p4(P4::exec, func, funcArgs);
         }
+    }
+
+    private static void outputMessage(@NotNull ErrorSeverity severity, @NotNull String message) {
+        if (!severity.isOk()) {
+            System.out.print(severity.name() + ": ");
+        }
+        System.out.println(message);
     }
 
     @NotNull
@@ -76,7 +85,7 @@ public final class P4 {
     }
 
     @Nullable
-    private static Message.Builder exec(@NotNull Message message) throws IOException {
+    private static Message.Builder exec(@NotNull Message message, @NotNull Holder<ErrorSeverity> severityHolder) throws IOException {
         switch (message.getFunc()) {
             case "client-FstatInfo":
                 for (String paramName : message.getParams().keySet()) {

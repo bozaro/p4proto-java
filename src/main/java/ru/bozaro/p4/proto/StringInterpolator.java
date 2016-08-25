@@ -1,4 +1,4 @@
-package ru.bozaro.p4;
+package ru.bozaro.p4.proto;
 
 import org.jetbrains.annotations.NotNull;
 

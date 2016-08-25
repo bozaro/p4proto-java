@@ -2,9 +2,9 @@ package ru.bozaro.p4.proto;
 
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import ru.bozaro.p4.StringInterpolator;
 import ru.bozaro.p4.crypto.Mangle;
 
+import javax.xml.ws.Holder;
 import java.io.IOException;
 import java.io.StreamCorruptedException;
 import java.net.InetSocketAddress;
@@ -21,7 +21,7 @@ import java.util.HashMap;
  *
  * @author Artem V. Navrotskiy
  */
-public class Client {
+public final class Client implements AutoCloseable {
 
     @NotNull
     private final Message.Builder baseMessage;
@@ -33,6 +33,8 @@ public class Client {
     private final Socket socket;
     @NotNull
     private final HashMap<String, Callback> funcs;
+    @NotNull
+    private final String username;
     public boolean verbose = false;
     private boolean protocolSent = false;
     private int protocolServer = -1;
@@ -49,8 +51,9 @@ public class Client {
                   boolean tag,
                   @NotNull InputResolver inputResolver,
                   @NotNull MessageOutput messageOutput) {
+        this.username = username;
         this.messageOutput = messageOutput;
-        this.baseMessage = createBaseMessage(username, tag);
+        this.baseMessage = createBaseMessage(tag);
         this.socket = socket;
         this.password = password;
         this.funcs = new HashMap<>();
@@ -63,27 +66,8 @@ public class Client {
         funcs.put("client-SetPassword", this::clientSetPassword);
     }
 
-    @NotNull
-    private static Message.Builder createBaseMessage(@NotNull String username, boolean tag) {
-        final Message.Builder result = new Message.Builder();
-
-        result.param("autoLogin", "");
-        if (tag) {
-            result.param("tag", "");
-        }
-        result.param("enableStreams", "expandAndmaps" /*, "yes"*/);
-        result.param("client", "");
-        result.param("cwd", "");
-        result.param("os", "UNIX");
-        result.param("user", username);
-        result.param("charset", "1"); // UTF-8
-        result.param("clientCase", "1"); // 0 - case insensitive, 1 - case sensitive
-
-        return result;
-    }
-
     @Nullable
-    protected static byte[] getSocketAddr(@NotNull SocketAddress address) {
+    private static byte[] getSocketAddr(@NotNull SocketAddress address) {
         if (address instanceof InetSocketAddress) {
             InetSocketAddress inet = (InetSocketAddress) address;
             return String.format("%s:%d", inet.getHostString(), inet.getPort()).getBytes();
@@ -104,17 +88,52 @@ public class Client {
         }
     }
 
+    @NotNull
+    public String getUsername() {
+        return username;
+    }
+
+    @NotNull
+    private Message.Builder createBaseMessage(boolean tag) {
+        final Message.Builder result = new Message.Builder();
+
+        result.param("autoLogin", "");
+        if (tag) {
+            result.param("tag", "");
+        }
+        result.param("enableStreams", "expandAndmaps" /*, "yes"*/);
+        result.param("client", "");
+        result.param("cwd", "");
+        result.param("os", "UNIX");
+        result.param("user", username);
+        result.param("charset", "1"); // UTF-8
+        result.param("clientCase", "1"); // 0 - case insensitive, 1 - case sensitive
+
+        return result;
+    }
+
     @Nullable
-    private Message.Builder clientMessage(@NotNull Message message) {
+    private Message.Builder clientMessage(@NotNull Message message, @NotNull Holder<ErrorSeverity> severityHolder) {
         String fmt;
         for (int i = 0; (fmt = message.getString("fmt" + i)) != null; ++i) {
+            final String codeString = message.getString("code" + i);
+            ErrorSeverity severity = ErrorSeverity.None;
+
+            if (codeString != null) {
+                int code = Integer.parseInt(codeString);
+                severity = ErrorSeverity.values()[(code >> 28) & 0x3ff];
+
+                if (severity.compareTo(severityHolder.value) > 0)
+                    severityHolder.value = severity;
+            }
+
             final String msg = StringInterpolator.interpolate(fmt, s -> message.getStringOrDefault(s, ""));
-            messageOutput.output(msg);
+            messageOutput.output(severity, msg);
         }
         return null;
     }
 
-    public synchronized void p4(@NotNull Callback callback, @NotNull String func, @NotNull String... args) throws IOException {
+    public synchronized boolean p4(@NotNull Callback callback, @NotNull String func, @NotNull String... args) throws IOException {
         if (!protocolSent) {
             send(new Message.Builder()
                     .param("client", "80")
@@ -123,36 +142,49 @@ public class Client {
                     .param("func", "protocol"));
             protocolSent = true;
 
-            // HACK! We need to know server version before calling RPCs but server won't send us 'protocol' message
-            // before we call any RPC. So, call any random RPC and just ignore its result.
-            p4(message -> null, "discover");
+            final boolean[] needLogin = {false};
+            final Callback autologinCallback = (message, severityHolder) -> {
+                needLogin[0] = "enabled".equals(message.getString("password"));
+                return null;
+            };
+            if (p4(autologinCallback, "info") && needLogin[0]) {
+                p4((message, severityHolder) -> null, "login");
+            }
         }
+
         final Message.Builder builder = baseMessage.clone().param(Message.FUNC, "user-" + func);
         for (String arg : args) {
             builder.arg(arg);
         }
         send(builder);
+
+        final Holder<ErrorSeverity> severityHolder = new Holder<>(ErrorSeverity.None);
+
         while (true) {
             Message message = Message.recv(socket.getInputStream());
             if (verbose) {
                 show(">>", message);
             }
-            String clientFunc = message.getString(Message.FUNC);
-            if (clientFunc == null)
+            final String clientFunc = message.getFunc();
+            if (clientFunc.length() <= 0)
                 throw new StreamCorruptedException();
+
             if ("release".equals(clientFunc))
                 break;
+
             final Callback builtin = funcs.get(clientFunc);
             final Message.Builder response;
             if (builtin != null) {
-                response = builtin.exec(message);
+                response = builtin.exec(message, severityHolder);
             } else {
-                response = callback.exec(message);
+                response = callback.exec(message, severityHolder);
             }
             if (response != null) {
                 send(response);
             }
         }
+
+        return severityHolder.value.isOk();
     }
 
     private void send(@NotNull Message.Builder builder) throws IOException {
@@ -168,14 +200,14 @@ public class Client {
     }
 
     @Nullable
-    protected Message.Builder flush1(@NotNull Message req) {
+    private Message.Builder flush1(@NotNull Message req, @NotNull Holder<ErrorSeverity> severityHolder) {
         return new Message.Builder()
                 .param("fseq", req.getBytes("fseq"))
                 .param(Message.FUNC, "flush2");
     }
 
     @Nullable
-    protected Message.Builder clientProtocol(@NotNull Message req) {
+    private Message.Builder clientProtocol(@NotNull Message req, @NotNull Holder<ErrorSeverity> severityHolder) {
         String protocolVersionString = req.getString("server2");
 
         if (protocolVersionString == null) {
@@ -194,7 +226,7 @@ public class Client {
     }
 
     @Nullable
-    protected Message.Builder clientSetPassword(@NotNull Message req) {
+    private Message.Builder clientSetPassword(@NotNull Message req, @NotNull Holder<ErrorSeverity> severityHolder) {
         final byte[] token = req.getBytes("digest");
         final byte[] ticket = req.getBytes("data");
         if (token != null && secretHash != null) {
@@ -204,7 +236,7 @@ public class Client {
     }
 
     @Nullable
-    protected Message.Builder clientCrypto(@NotNull Message req) {
+    private Message.Builder clientCrypto(@NotNull Message req, @NotNull Holder<ErrorSeverity> severityHolder) {
         final byte[] confirm = req.getBytes("confirm");
         if (secretToken == null) {
             return new Message.Builder()
@@ -224,7 +256,7 @@ public class Client {
     }
 
     @Nullable
-    protected Message.Builder clientPrompt(@NotNull Message req) throws IOException {
+    private Message.Builder clientPrompt(@NotNull Message req, @NotNull Holder<ErrorSeverity> severityHolder) throws IOException {
         if (password == null || password.length() <= 0) {
             password = inputResolver.getUserInput(req.getString("data"), req.getBytes("noecho") != null);
         }
@@ -233,7 +265,7 @@ public class Client {
     }
 
     @Nullable
-    protected Message.Builder clientPrompt(@NotNull Message req, byte[] secret) {
+    private Message.Builder clientPrompt(@NotNull Message req, byte[] secret) {
         final byte[] truncate = req.getBytes("truncate");
         final byte[] digest = req.getBytes("digest");
         final byte[] confirm = req.getBytes("confirm");
@@ -260,17 +292,21 @@ public class Client {
                 .param("daddr", daddr);
     }
 
+    @Override
+    public void close() throws Exception {
+        socket.close();
+    }
+
     @FunctionalInterface
     public interface MessageOutput {
 
-        void output(@NotNull String message);
+        void output(@NotNull ErrorSeverity severity, @NotNull String message);
     }
 
     @FunctionalInterface
     public interface Callback {
 
-        @Nullable
-        Message.Builder exec(@NotNull Message message) throws IOException;
+        Message.Builder exec(@NotNull Message message, Holder<ErrorSeverity> severityHolder) throws IOException;
     }
 
     @FunctionalInterface
