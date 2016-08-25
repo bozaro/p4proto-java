@@ -12,7 +12,7 @@ cache:
   directories:
   - $HOME/.gradle/caches/
   - $HOME/.gradle/wrapper/
-pre_install:
+before_install:
 - mkdir -p build/r${P4D_VERSION}
 - wget http://cdist2.perforce.com/perforce/r${P4D_VERSION}/bin.linux26x86_64/p4d -O build/r${P4D_VERSION}/p4d
 - chmod +x build/r${P4D_VERSION}/p4d
