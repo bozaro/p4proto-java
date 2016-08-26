@@ -1,7 +1,6 @@
 package ru.bozaro.p4;
 
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 import ru.bozaro.p4.proto.Client;
 
 import java.io.File;
@@ -82,13 +81,13 @@ public final class P4Tester implements AutoCloseable {
     }
 
     @NotNull
-    public Client connect(@NotNull String username, @Nullable String password) throws Exception {
+    public Client connect(@NotNull String username, @NotNull String password) throws Exception {
         long timeout = System.currentTimeMillis() + 10 * 1000;
         while (true) {
             try {
                 Socket socket = new Socket(HOST, serverPort);
-                return new Client(socket, username, password, true, (prompt, noecho) -> "", (severity, message) -> {
-                });
+                return new Client(socket, username, password, (prompt, noecho) -> "", (severity, message) -> {
+                }, false);
             } catch (ConnectException e) {
                 if (System.currentTimeMillis() > timeout)
                     throw new IOException("Server connect timeout", e);
@@ -100,11 +99,11 @@ public final class P4Tester implements AutoCloseable {
 
     @NotNull
     public Client connect() throws Exception {
-        return connectWithPassword(null);
+        return connectWithPassword("");
     }
 
     @NotNull
-    public Client connectWithPassword(@Nullable String password) throws Exception {
+    public Client connectWithPassword(@NotNull String password) throws Exception {
         return connect("JackSparrow", password);
     }
 

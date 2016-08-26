@@ -50,14 +50,25 @@ public final class P4 {
             final Client client = new Client(socket,
                     cmd.user,
                     cmd.password,
-                    cmd.tag,
                     P4::userInput,
-                    P4::outputMessage);
+                    P4::outputMessage,
+                    cmd.verboseRPC > 0);
 
             final String func = cmd.command.get(0);
             final String[] funcArgs = cmd.command.subList(1, cmd.command.size()).toArray(new String[0]);
 
-            client.p4(P4::exec, func, funcArgs);
+            final Client.Callback callback = new Client.Callback() {
+                @Override
+                public boolean tag() {
+                    return cmd.tag;
+                }
+
+                @Override
+                public Message.Builder exec(@NotNull Message message, Holder<ErrorSeverity> severityHolder) throws IOException {
+                    return P4.exec(message);
+                }
+            };
+            client.p4(callback, func, funcArgs);
         }
     }
 
@@ -85,7 +96,7 @@ public final class P4 {
     }
 
     @Nullable
-    private static Message.Builder exec(@NotNull Message message, @NotNull Holder<ErrorSeverity> severityHolder) throws IOException {
+    private static Message.Builder exec(@NotNull Message message) throws IOException {
         switch (message.getFunc()) {
             case "client-FstatInfo":
                 for (String paramName : message.getParams().keySet()) {
@@ -115,6 +126,8 @@ public final class P4 {
         private String password = System.getenv().getOrDefault("P4PASSWD", "");
         @Parameter(names = {"-Ztag"})
         private boolean tag = false;
+        @Parameter(names = {"-vrpc"})
+        private int verboseRPC = 0;
         @Parameter(names = {"-h", "--help"}, description = "Show help", help = true)
         private boolean help = false;
     }

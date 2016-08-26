@@ -35,11 +35,11 @@ public final class Client implements AutoCloseable {
     private final HashMap<String, Callback> funcs;
     @NotNull
     private final String username;
-    public boolean verbose = false;
+    private final boolean verbose;
     private boolean protocolSent = false;
     private int protocolServer = -1;
-    @Nullable
-    private String password;
+    @NotNull
+    private String password = "";
     @Nullable
     private byte[] secretToken = null;
     @Nullable
@@ -47,13 +47,14 @@ public final class Client implements AutoCloseable {
 
     public Client(@NotNull Socket socket,
                   @NotNull String username,
-                  @Nullable String password,
-                  boolean tag,
+                  @NotNull String password,
                   @NotNull InputResolver inputResolver,
-                  @NotNull MessageOutput messageOutput) {
+                  @NotNull MessageOutput messageOutput,
+                  boolean verbose) {
         this.username = username;
         this.messageOutput = messageOutput;
-        this.baseMessage = createBaseMessage(tag);
+        this.verbose = verbose;
+        this.baseMessage = createBaseMessage();
         this.socket = socket;
         this.password = password;
         this.funcs = new HashMap<>();
@@ -94,13 +95,9 @@ public final class Client implements AutoCloseable {
     }
 
     @NotNull
-    private Message.Builder createBaseMessage(boolean tag) {
+    private Message.Builder createBaseMessage() {
         final Message.Builder result = new Message.Builder();
 
-        result.param("autoLogin", "");
-        if (tag) {
-            result.param("tag", "");
-        }
         result.param("enableStreams", "expandAndmaps" /*, "yes"*/);
         result.param("client", "");
         result.param("cwd", "");
@@ -155,6 +152,10 @@ public final class Client implements AutoCloseable {
         final Message.Builder builder = baseMessage.clone().param(Message.FUNC, "user-" + func);
         for (String arg : args) {
             builder.arg(arg);
+        }
+
+        if (callback.tag()) {
+            builder.param("tag", "");
         }
         send(builder);
 
@@ -257,21 +258,20 @@ public final class Client implements AutoCloseable {
 
     @Nullable
     private Message.Builder clientPrompt(@NotNull Message req, @NotNull Holder<ErrorSeverity> severityHolder) throws IOException {
-        if (password == null || password.length() <= 0) {
-            password = inputResolver.getUserInput(req.getString("data"), req.getBytes("noecho") != null);
-        }
-
-        return clientPrompt(req, password != null ? password.getBytes(StandardCharsets.UTF_8) : null);
-    }
-
-    @Nullable
-    private Message.Builder clientPrompt(@NotNull Message req, byte[] secret) {
-        final byte[] truncate = req.getBytes("truncate");
+        final boolean truncate = req.getBytes("truncate") != null;
         final byte[] digest = req.getBytes("digest");
         final byte[] confirm = req.getBytes("confirm");
+        final boolean noprompt = req.getBytes("noprompt") != null;
+        final boolean noecho = req.getBytes("noecho") != null;
+        final String data = req.getString("data");
 
-        byte[] result = secret == null ? new byte[0] : secret;
-        if ((truncate != null) && (result.length > 0x10))
+        if (password.length() <= 0 && !noprompt) {
+            password = inputResolver.getUserInput(data, noecho);
+        }
+
+        byte[] result = password.getBytes(StandardCharsets.UTF_8);
+
+        if (truncate && (result.length > 0x10))
             result = Arrays.copyOf(result, 0x10);
 
         final byte[] daddr = getSocketAddr(socket.getRemoteSocketAddress());
@@ -306,12 +306,16 @@ public final class Client implements AutoCloseable {
     @FunctionalInterface
     public interface Callback {
 
+        default boolean tag() {
+            return true;
+        }
+
         Message.Builder exec(@NotNull Message message, Holder<ErrorSeverity> severityHolder) throws IOException;
     }
 
     @FunctionalInterface
     public interface InputResolver {
-        @Nullable
+        @NotNull
         String getUserInput(@Nullable String prompt, boolean noecho) throws IOException;
     }
 }
