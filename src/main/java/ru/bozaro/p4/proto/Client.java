@@ -7,9 +7,7 @@ import ru.bozaro.p4.crypto.Mangle;
 import javax.xml.ws.Holder;
 import java.io.IOException;
 import java.io.StreamCorruptedException;
-import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.net.SocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -65,15 +63,6 @@ public final class Client implements AutoCloseable {
         funcs.put("client-Message", this::clientMessage);
         funcs.put("client-Prompt", this::clientPrompt);
         funcs.put("client-SetPassword", this::clientSetPassword);
-    }
-
-    @Nullable
-    private static byte[] getSocketAddr(@NotNull SocketAddress address) {
-        if (address instanceof InetSocketAddress) {
-            InetSocketAddress inet = (InetSocketAddress) address;
-            return String.format("%s:%d", inet.getAddress().getHostAddress(), inet.getPort()).getBytes();
-        }
-        return null;
     }
 
     @NotNull
@@ -136,7 +125,7 @@ public final class Client implements AutoCloseable {
                     .param("client", "80")
                     .param("sndbuf", "524288")
                     .param("rcvbuf", "524288")
-                    .param("func", "protocol"));
+                    .param(Message.FUNC, "protocol"));
             protocolSent = true;
 
             final boolean[] needLogin = {false};
@@ -245,15 +234,11 @@ public final class Client implements AutoCloseable {
                     .param("token", "");
         }
         final byte[] token = req.getBytes("token");
-        final byte[] daddr = getSocketAddr(socket.getRemoteSocketAddress());
         byte[] result = md5(token, secretToken);
-        if (daddr != null && protocolServer >= 29) {
-            result = md5(result, daddr);
-        }
+
         return new Message.Builder()
                 .param(Message.FUNC, confirm)
-                .param("token", result)
-                .param("daddr", daddr);
+                .param("token", result);
     }
 
     @Nullable
@@ -274,21 +259,16 @@ public final class Client implements AutoCloseable {
         if (truncate && (result.length > 0x10))
             result = Arrays.copyOf(result, 0x10);
 
-        final byte[] daddr = getSocketAddr(socket.getRemoteSocketAddress());
         if (digest != null) {
             result = md5(result);
             secretHash = result;
             if (digest.length > 0) {
                 result = md5(result, digest);
             }
-            if (daddr != null && protocolServer >= 29) {
-                result = md5(result, daddr);
-            }
         }
         return req.toBuilder()
                 .param(Message.FUNC, confirm)
-                .param("data", result)
-                .param("daddr", daddr);
+                .param("data", result);
     }
 
     @Override
