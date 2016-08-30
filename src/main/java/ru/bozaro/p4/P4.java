@@ -5,8 +5,10 @@ import com.beust.jcommander.Parameter;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 import ru.bozaro.p4.proto.Client;
+import ru.bozaro.p4.proto.ErrorSeverity;
 import ru.bozaro.p4.proto.Message;
 
+import javax.xml.ws.Holder;
 import java.io.BufferedReader;
 import java.io.Console;
 import java.io.IOException;
@@ -48,15 +50,33 @@ public final class P4 {
             final Client client = new Client(socket,
                     cmd.user,
                     cmd.password,
-                    cmd.tag,
                     P4::userInput,
-                    System.out::println);
+                    P4::outputMessage,
+                    cmd.verboseRPC > 0);
 
             final String func = cmd.command.get(0);
             final String[] funcArgs = cmd.command.subList(1, cmd.command.size()).toArray(new String[0]);
 
-            client.p4(P4::exec, func, funcArgs);
+            final Client.Callback callback = new Client.Callback() {
+                @Override
+                public boolean tag() {
+                    return cmd.tag;
+                }
+
+                @Override
+                public Message.Builder exec(@NotNull Message message, Holder<ErrorSeverity> severityHolder) throws IOException {
+                    return P4.exec(message);
+                }
+            };
+            client.p4(callback, func, funcArgs);
         }
+    }
+
+    private static void outputMessage(@NotNull ErrorSeverity severity, @NotNull String message) {
+        if (!severity.isOk()) {
+            System.out.print(severity.name() + ": ");
+        }
+        System.out.println(message);
     }
 
     @NotNull
@@ -106,6 +126,8 @@ public final class P4 {
         private String password = System.getenv().getOrDefault("P4PASSWD", "");
         @Parameter(names = {"-Ztag"})
         private boolean tag = false;
+        @Parameter(names = {"-vrpc"})
+        private int verboseRPC = 0;
         @Parameter(names = {"-h", "--help"}, description = "Show help", help = true)
         private boolean help = false;
     }

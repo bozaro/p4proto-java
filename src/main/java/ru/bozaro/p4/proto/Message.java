@@ -12,9 +12,10 @@ import java.util.*;
  *
  * @author Artem V. Navrotskiy
  */
-public class Message {
+public final class Message {
     @NotNull
     public static final String FUNC = "func";
+    @NotNull
     private static final byte[] EMPTY_BYTES = {};
 
     @NotNull
@@ -86,7 +87,9 @@ public class Message {
     }
 
     public static class Builder {
-        /** We want to preserve order of this for human-friendliness of stuff like 'p4 info' */
+        /**
+         * We want to preserve order of this for human-friendliness of stuff like 'p4 info'.
+         */
         @NotNull
         private final Map<String, byte[]> params = new LinkedHashMap<>();
         @NotNull
@@ -127,6 +130,7 @@ public class Message {
             return this;
         }
 
+        @SuppressWarnings("CloneDoesntCallSuperClone")
         @Override
         @NotNull
         public Builder clone() {

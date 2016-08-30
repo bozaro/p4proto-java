@@ -3,7 +3,7 @@ package ru.bozaro.p4;
 import org.testng.annotations.Test;
 
 import static org.testng.Assert.assertEquals;
-import static ru.bozaro.p4.StringInterpolator.interpolate;
+import static ru.bozaro.p4.proto.StringInterpolator.interpolate;
 
 /**
  * @author Marat Radchenko

@@ -29,12 +29,9 @@ public final class P4Tester implements AutoCloseable {
     private final Path serverPath;
     @NotNull
     private final Process daemon;
-
-    @NotNull
-    private Client client;
+    private final int serverPort;
 
     public P4Tester(boolean unicode) throws Exception {
-
         File serverDir = File.createTempFile("p4-server-", "");
         if (!serverDir.delete())
             throw new IOException("Failed to delete " + serverDir);
@@ -52,29 +49,13 @@ public final class P4Tester implements AutoCloseable {
             assertEquals(0, exitCode);
         }
 
-        final int serverPort = detectPort();
+        serverPort = detectPort();
         daemon = Runtime.getRuntime().exec(new String[]{
                 "p4d",
                 "-p", String.format("%s:%s", HOST, serverPort),
                 "-r", serverPath.toString(),
         });
 
-        Socket socket;
-        long timeout = System.currentTimeMillis() + 10 * 1000;
-        while (true) {
-            try {
-                socket = new Socket(HOST, serverPort);
-                client = new Client(socket, "JackSparrow", null, true, (prompt, noecho) -> "", message -> {
-                });
-                client.verbose = true;
-                break;
-            } catch (ConnectException e) {
-                if (System.currentTimeMillis() > timeout)
-                    throw new IOException("Server connect timeout", e);
-                else
-                    Thread.sleep(100);
-            }
-        }
     }
 
     private static int detectPort() throws IOException {
@@ -99,15 +80,37 @@ public final class P4Tester implements AutoCloseable {
         });
     }
 
+    @NotNull
+    public Client connect(@NotNull String username, @NotNull String password) throws Exception {
+        long timeout = System.currentTimeMillis() + 10 * 1000;
+        while (true) {
+            try {
+                Socket socket = new Socket(HOST, serverPort);
+                return new Client(socket, username, password, (prompt, noecho) -> "", (severity, message) -> {
+                }, false);
+            } catch (ConnectException e) {
+                if (System.currentTimeMillis() > timeout)
+                    throw new IOException("Server connect timeout", e);
+                else
+                    Thread.sleep(100);
+            }
+        }
+    }
+
+    @NotNull
+    public Client connect() throws Exception {
+        return connectWithPassword("");
+    }
+
+    @NotNull
+    public Client connectWithPassword(@NotNull String password) throws Exception {
+        return connect("JackSparrow", password);
+    }
+
     @Override
     public void close() throws Exception {
         daemon.destroy();
         daemon.waitFor();
         deleteDirectory(serverPath);
-    }
-
-    @NotNull
-    public Client getClient() {
-        return client;
     }
 }
