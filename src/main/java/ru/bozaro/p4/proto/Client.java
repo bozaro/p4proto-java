@@ -71,7 +71,7 @@ public final class Client implements AutoCloseable {
     private static byte[] getSocketAddr(@NotNull SocketAddress address) {
         if (address instanceof InetSocketAddress) {
             InetSocketAddress inet = (InetSocketAddress) address;
-            return String.format("%s:%d", inet.getHostString(), inet.getPort()).getBytes();
+            return String.format("%s:%d", inet.getAddress().getHostAddress(), inet.getPort()).getBytes();
         }
         return null;
     }
@@ -288,7 +288,6 @@ public final class Client implements AutoCloseable {
         return req.toBuilder()
                 .param(Message.FUNC, confirm)
                 .param("data", result)
-                .param("digest", digest)
                 .param("daddr", daddr);
     }
 
