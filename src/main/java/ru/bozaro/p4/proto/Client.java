@@ -48,13 +48,15 @@ public final class Client implements AutoCloseable {
     public Client(@NotNull Socket socket,
                   @NotNull String username,
                   @NotNull String password,
+                  // TODO: here or parameter to p4()?
+                  @NotNull String client,
                   @NotNull InputResolver inputResolver,
                   @NotNull MessageOutput messageOutput,
                   boolean verbose) {
         this.username = username;
         this.messageOutput = messageOutput;
         this.verbose = verbose;
-        this.baseMessage = createBaseMessage();
+        this.baseMessage = createBaseMessage(client);
         this.socket = socket;
         this.password = password;
         this.funcs = new HashMap<>();
@@ -94,19 +96,17 @@ public final class Client implements AutoCloseable {
         return username;
     }
 
-    @NotNull
-    private Message.Builder createBaseMessage() {
-        final Message.Builder result = new Message.Builder();
-
-        result.param("enableStreams", "expandAndmaps" /*, "yes"*/);
-        result.param("client", "");
-        result.param("cwd", "");
-        result.param("os", "UNIX");
-        result.param("user", username);
-        result.param("charset", "1"); // UTF-8
-        result.param("clientCase", "1"); // 0 - case insensitive, 1 - case sensitive
-
-        return result;
+    private Message.@NotNull Builder createBaseMessage(@NotNull String client) {
+        return new Message.Builder()
+                .param("enableStreams", "")
+                .param("expandAndmaps", "")
+                .param("client", "")
+                .param("cwd", System.getProperty("user.dir"))
+                .param("os", "UNIX")
+                .param("client", client)
+                .param("user", username)
+                .param("charset", "1") // UTF-8
+                .param("clientCase", "1");
     }
 
     @Nullable
@@ -130,7 +130,7 @@ public final class Client implements AutoCloseable {
         return null;
     }
 
-    public synchronized boolean p4(@NotNull Callback callback, @NotNull String func, @NotNull String... args) throws IOException {
+    public synchronized boolean p4(@NotNull Callback callback, @NotNull String func, @NotNull String... args) throws IOException, InterruptedException {
         if (!protocolSent) {
             send(new Message.Builder()
                     .param("client", "80")
@@ -309,7 +309,7 @@ public final class Client implements AutoCloseable {
             return true;
         }
 
-        Message.Builder exec(@NotNull Message message, Holder<ErrorSeverity> severityHolder) throws IOException;
+        Message.Builder exec(@NotNull Message message, Holder<ErrorSeverity> severityHolder) throws IOException, InterruptedException;
     }
 
     @FunctionalInterface
