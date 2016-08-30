@@ -146,28 +146,32 @@ public final class Message {
         }
     }
 
+    private void serializeParam(@NotNull ByteArrayOutputStream writer, @NotNull String name, @NotNull byte[] value) throws IOException {
+        writer.write(name.getBytes(StandardCharsets.UTF_8));
+        writer.write(0);
+
+        write32(writer, value.length);
+        writer.write(value);
+
+        writer.write(0);
+    }
+
     public byte[] serialize() throws IOException {
         ByteArrayOutputStream writer = new ByteArrayOutputStream(1024);
         writer.write(0);
         write32(writer, 0);
-        for (Map.Entry<String, byte[]> entry : params.entrySet()) {
-            byte[] key = entry.getKey().getBytes(StandardCharsets.UTF_8);
-            writer.write(key);
-            writer.write(0);
 
-            byte[] value = entry.getValue();
-            write32(writer, value.length);
-            writer.write(value);
-            writer.write(0);
-        }
+        for (Map.Entry<String, byte[]> entry : params.entrySet())
+            if (!FUNC.equals(entry.getKey()))
+                serializeParam(writer, entry.getKey(), entry.getValue());
 
-        for (String arg : args) {
-            writer.write(0);
-            byte[] value = arg.getBytes(StandardCharsets.UTF_8);
-            write32(writer, value.length);
-            writer.write(value);
-            writer.write(0);
-        }
+        for (String arg : args)
+            serializeParam(writer, "", arg.getBytes(StandardCharsets.UTF_8));
+
+        final byte[] func = params.get(FUNC);
+        if (func == null)
+            throw new IllegalArgumentException("Function name is not defined");
+        serializeParam(writer, FUNC, func);
 
         byte[] buffer = writer.toByteArray();
         int length = buffer.length - 5;
