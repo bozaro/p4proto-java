@@ -142,11 +142,16 @@ public final class Client implements AutoCloseable {
 
             final boolean[] needLogin = {false};
             final Callback autologinCallback = (message, severityHolder) -> {
+                if (!message.getFunc().equals("client-FstatInfo"))
+                    throw new StreamCorruptedException("Unexpected message: " + message);
+
                 needLogin[0] = "enabled".equals(message.getString("password"));
                 return null;
             };
             if (p4(autologinCallback, "info") && needLogin[0]) {
-                p4((message, severityHolder) -> null, "login");
+                p4((message, severityHolder) -> {
+                    throw new StreamCorruptedException("Unexpected message: " + message);
+                }, "login");
             }
         }
 
