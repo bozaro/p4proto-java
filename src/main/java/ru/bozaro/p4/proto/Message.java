@@ -45,7 +45,7 @@ public final class Message {
 
     @NotNull
     public String getFunc() {
-        return toString(params.getOrDefault("func", EMPTY_BYTES));
+        return toString(params.getOrDefault(Message.FUNC, EMPTY_BYTES));
     }
 
     @NotNull
