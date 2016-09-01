@@ -15,6 +15,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Map;
 
 /**
  * P4 client protocol implementation.
@@ -41,9 +42,9 @@ public final class Client implements AutoCloseable {
     @NotNull
     private String password = "";
     @Nullable
-    private byte[] secretToken = null;
-    @Nullable
     private byte[] secretHash = null;
+    @NotNull
+    private final Map<String, byte[]> secretTokens = new HashMap<>();
 
     public Client(@NotNull Socket socket,
                   @NotNull String username,
@@ -141,11 +142,16 @@ public final class Client implements AutoCloseable {
 
             final boolean[] needLogin = {false};
             final Callback autologinCallback = (message, severityHolder) -> {
+                if (!message.getFunc().equals("client-FstatInfo"))
+                    throw new StreamCorruptedException("Unexpected message: " + message);
+
                 needLogin[0] = "enabled".equals(message.getString("password"));
                 return null;
             };
             if (p4(autologinCallback, "info") && needLogin[0]) {
-                p4((message, severityHolder) -> null, "login");
+                p4((message, severityHolder) -> {
+                    throw new StreamCorruptedException("Unexpected message: " + message);
+                }, "login");
             }
         }
 
@@ -230,8 +236,9 @@ public final class Client implements AutoCloseable {
     private Message.Builder clientSetPassword(@NotNull Message req, @NotNull Holder<ErrorSeverity> severityHolder) {
         final byte[] token = req.getBytes("digest");
         final byte[] ticket = req.getBytes("data");
+        final String serverAddress = req.getString("serverAddress");
         if (token != null && secretHash != null) {
-            secretToken = Mangle.XOR(ticket, Mangle.InMD5(token, secretHash));
+            secretTokens.put(serverAddress, Mangle.XOR(ticket, Mangle.InMD5(token, secretHash)));
         }
         return null;
     }
@@ -239,6 +246,8 @@ public final class Client implements AutoCloseable {
     @Nullable
     private Message.Builder clientCrypto(@NotNull Message req, @NotNull Holder<ErrorSeverity> severityHolder) {
         final byte[] confirm = req.getBytes("confirm");
+        final String serverAddress = req.getString("serverAddress");
+        final byte[] secretToken = secretTokens.get(serverAddress);
         if (secretToken == null) {
             return new Message.Builder()
                     .param(Message.FUNC, confirm)
