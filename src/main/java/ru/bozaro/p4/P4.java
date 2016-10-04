@@ -79,20 +79,35 @@ public final class P4 {
         System.out.println(message);
     }
 
+    /**
+     * One cannot simply read line from stdin in Java.
+     */
     @NotNull
     private static String userInput(@NotNull String prompt, boolean noecho) throws IOException {
+        final Console console = System.console();
+        if (console != null) {
+            if (noecho)
+                return new String(console.readPassword("%s", prompt));
+            else
+                return console.readLine("%s", prompt);
+        }
+
         System.out.print(prompt);
         System.out.flush();
 
-        final String result;
-        Console console = System.console();
-        if (!noecho || console == null) {
-            result = new BufferedReader(new InputStreamReader(System.in)).readLine().trim();
-        } else {
-            result = new String(console.readPassword());
+        final StringBuilder result = new StringBuilder();
+
+        try (InputStreamReader is = new InputStreamReader(System.in)) {
+            int c;
+            while ((c = is.read()) != -1) {
+                if (c == '\n')
+                    return result.toString();
+
+                result.append((char) c);
+            }
         }
 
-        return result;
+        throw new EOFException();
     }
 
     @Nullable
@@ -115,9 +130,7 @@ public final class P4 {
 
                     final String editorPath = System.getenv().getOrDefault("EDITOR", "/usr/bin/nano");
                     final Process editor = new ProcessBuilder(editorPath, editFile.getPath())
-                            .redirectError(ProcessBuilder.Redirect.INHERIT)
-                            .redirectOutput(ProcessBuilder.Redirect.INHERIT)
-                            .redirectInput(ProcessBuilder.Redirect.INHERIT)
+                            .inheritIO()
                             .start();
                     final int exitCode = editor.waitFor();
 

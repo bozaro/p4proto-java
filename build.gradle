@@ -27,6 +27,18 @@ allprojects {
   apply plugin: "java"
   apply plugin: "maven"
   apply plugin: "signing"
+  apply plugin: 'application'
+
+  mainClassName = "ru.bozaro.p4.P4"
+
+  run {
+    systemProperties System.properties
+    standardInput = System.in
+
+    if (System.getProperty("exec.args") != null) {
+      args System.getProperty("exec.args").split()
+    }
+  }
 
   group = "ru.bozaro.p4"
   version = "0.1.0-SNAPSHOT"
