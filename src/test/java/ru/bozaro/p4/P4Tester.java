@@ -3,7 +3,6 @@ package ru.bozaro.p4;
 import org.jetbrains.annotations.NotNull;
 import ru.bozaro.p4.proto.Client;
 
-import java.io.File;
 import java.io.IOException;
 import java.net.ConnectException;
 import java.net.InetAddress;
@@ -32,12 +31,7 @@ public final class P4Tester implements AutoCloseable {
     private final int serverPort;
 
     public P4Tester(boolean unicode) throws Exception {
-        File serverDir = File.createTempFile("p4-server-", "");
-        if (!serverDir.delete())
-            throw new IOException("Failed to delete " + serverDir);
-        if (!serverDir.mkdir())
-            throw new IOException("Failed to mkdir " + serverDir);
-        serverPath = serverDir.toPath();
+        serverPath = Files.createTempDirectory("p4-server-");
 
         if (unicode) {
             final Process process = Runtime.getRuntime().exec(new String[]{
@@ -55,7 +49,6 @@ public final class P4Tester implements AutoCloseable {
                 "-p", String.format("%s:%s", HOST, serverPort),
                 "-r", serverPath.toString(),
         });
-
     }
 
     private static int detectPort() throws IOException {

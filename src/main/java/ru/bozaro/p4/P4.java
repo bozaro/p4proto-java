@@ -13,6 +13,8 @@ import java.io.*;
 import java.net.InetAddress;
 import java.net.Socket;
 import java.net.UnknownHostException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -122,14 +124,12 @@ public final class P4 {
                 return null;
 
             case "client-EditData":
-                final File editFile = File.createTempFile("p4-EditData", "");
+                final Path editFile = Files.createTempFile("p4-EditData", "");
                 try {
-                    try (FileOutputStream out = new FileOutputStream(editFile)) {
-                        out.write(message.getBytes("data"));
-                    }
+                    Files.write(editFile, message.getBytes("data"));
 
                     final String editorPath = System.getenv().getOrDefault("EDITOR", "/usr/bin/nano");
-                    final Process editor = new ProcessBuilder(editorPath, editFile.getPath())
+                    final Process editor = new ProcessBuilder(editorPath, editFile.toString())
                             .inheritIO()
                             .start();
                     final int exitCode = editor.waitFor();
@@ -139,21 +139,13 @@ public final class P4 {
                                 .param(Message.FUNC, message.getBytes("decline"));
                     }
 
-                    try (FileInputStream in = new FileInputStream(editFile)) {
-                        // 2GB will be enough for everyone
-                        final byte[] data = new byte[(int) editFile.length()];
+                    final byte[] data = Files.readAllBytes(editFile);
 
-                        // TODO: error handling? loop?
-                        //noinspection ResultOfMethodCallIgnored
-                        in.read(data);
-
-                        return message.toBuilder()
-                                .param("data", data)
-                                .param(Message.FUNC, message.getBytes("confirm"));
-                    }
+                    return message.toBuilder()
+                            .param("data", data)
+                            .param(Message.FUNC, message.getBytes("confirm"));
                 } finally {
-                    //noinspection ResultOfMethodCallIgnored
-                    editFile.delete();
+                    Files.delete(editFile);
                 }
 
             case "client-ErrorPause":
